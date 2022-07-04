@@ -16,7 +16,8 @@ def draw_box_on_red_shapes(img):
     img_red = fokus_red(img)
     
     # Thresholding
-    _, img_thresh = cv.threshold(img_red, 0, 255, cv.THRESH_OTSU)
+    #_, img_thresh = cv.threshold(img_red, 0, 255, cv.THRESH_OTSU)
+    _, img_thresh = cv.threshold(img_red, thresh=80, maxval=255, type=cv.THRESH_BINARY)
 
     contours, _ = cv.findContours(img_thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
 
