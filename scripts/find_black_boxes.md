@@ -9,7 +9,7 @@ Algorithm intends to identify the black field within the gasmeter in form of its
 6. Find smallest possible rectangle using `cv.minAreaRect()` 
 7. Calculate aspect ratio of the minRect:  `max(h/w, w/h)`
 8. Filter contours for aspect ratio in range around 8.83
-9. Filter contours for area being >95% of area minRext.
+9. Filter contours for area being >95% of area minRect.
 10. The contour that passed all filters must be approximated down to 4 points. 
 
 
