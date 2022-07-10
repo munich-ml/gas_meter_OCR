@@ -1,6 +1,8 @@
 # %% FIND BLACK BOX SCRIPT
 import numpy as np
 import cv2 as cv
+import json, os
+import datetime as dt
 
 
 def bgr_2_gray(img):
@@ -147,7 +149,15 @@ if __name__ == "__main__":
         number_field = find_black_number_field(img_bgr=img_bgr)
         if number_field is not None:
             img_number_field, contour, params = number_field
-            print(params)
+            
+            # save results to files
+            fpb = os.path.join("results", dt.datetime.now().strftime("%Y%m%d-%H%M%S"))
+            with open(fpb+"_params.json", "w") as file:
+                json.dump(params, file)
+            cv.imwrite(fpb +"_img_bgr.jpg", img_bgr)
+            cv.imwrite(fpb +"_img_number_field.jpg", img_number_field)
+            
+            # show results on screen
             cv.imshow("Digits", img_number_field)    
             cv.drawContours(img_bgr, [contour], -1, (0, 255, 0), 2)
             
