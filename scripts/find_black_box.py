@@ -35,11 +35,6 @@ def approx_contour(contour, n_points=4, max_iteration=1000):
     raise RuntimeError("Waring: Approximation to 4 points failed")
     
 
-def printc(contour):
-    for item in contour:
-        print(f"{item}, ", end="")
-    print()
-    
     
 def normalize_rectangle(contour):
     """ Normalized an opencv contour in a way that the points are in the same order.
@@ -82,6 +77,62 @@ def normalize_rectangle(contour):
     return np.array([upper_left[0], lower_left[0], lower_right[0], upper_right[0]], dtype=np.float32)
 
 
+
+def find_black_number_field(img_bgr):
+    img_gray = bgr_2_gray(img_bgr)
+
+    # try different grayscale contours for number field search
+    grayscale_thresholds=[50, 60, 70, 80, 90, 100, 110]
+    for threshold in grayscale_thresholds:
+        # Apply binary fixed threshold
+        _, img_th = cv.threshold(img_gray, thresh=threshold, maxval=255, type=cv.THRESH_BINARY)
+        
+        # find contours
+        contours, _ = cv.findContours(img_th, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        
+        # ignore tiny contours
+        big_contours = [c for c in contours if cv.contourArea(c) > 1e3]
+        
+        # force convex contours
+        convex_contours = [cv.convexHull(c) for c in big_contours]
+        
+        # find the right gasmeter contour    
+        for contour in convex_contours:
+            minRect = cv.minAreaRect(contour)
+            (x, y), (h, w), angle = minRect
+            
+            # Test 1: Aspect ratio:
+            aspect_ratio = max(h/w, w/h)
+            if not(7 < aspect_ratio < 11):
+                continue
+                
+            # Test2: How much is the contour a rectangle
+            rect_factor = cv.contourArea(contour) / (h*w)
+            if rect_factor < 0.91:
+                continue
+            
+            # Only the right gasmeter contours get to this point
+            # Now reduce the contour down to 4 points (but not less)
+            try:
+                apx = approx_contour(contour)
+            except RuntimeError as e:
+                print(e)
+                continue
+            
+            w2, h2 = 1000, 110
+            pts2 = np.float32([[0, h2], [0, 0], [w2, 0], [w2, h2]])
+            cnorm = normalize_rectangle(apx)
+
+            matrix = cv.getPerspectiveTransform(cnorm, pts2)
+            img_number_field = cv.warpPerspective(img_bgr, matrix, (w2, h2))
+            
+            area = cv.contourArea(contour)
+            params = {"threshold": threshold, "area": area, "ascpect_ratio": aspect_ratio, "rect_factor": rect_factor}
+
+            return img_number_field, contour, params
+            
+        
+
 if __name__ == "__main__":
     
     cap = cv.VideoCapture(0, cv.CAP_DSHOW)
@@ -90,76 +141,21 @@ if __name__ == "__main__":
     cap.set(cv.CAP_PROP_FOURCC, cv.VideoWriter.fourcc('M','J','P','G'))
     cap.set(cv.CAP_PROP_FRAME_WIDTH, 1920)
     cap.set(cv.CAP_PROP_FRAME_HEIGHT, 1080)
-    
-
-    file = open("black_boxes.csv", "w") 
-    file.write("threshold, area, aspect_ratio, rect_factor\n")
-                
+                    
     while True:
         _, img_bgr = cap.read()
-        img_gray = bgr_2_gray(img_bgr)
-
-        for threshold in [50, 60, 70, 80, 90, 100, 110]:
-            # Apply binary fixed threshold
-            _, img_th = cv.threshold(img_gray, thresh=threshold, maxval=255, type=cv.THRESH_BINARY)
-            
-            # find contours
-            contours, _ = cv.findContours(img_th, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-            
-            # ignore tiny contours
-            big_contours = [c for c in contours if cv.contourArea(c) > 1e3]
-            
-            # force convex contours
-            convex_contours = [cv.convexHull(c) for c in big_contours]
-            
-            # find the right gasmeter contour    
-            gasmeter_found = False
-            for contour in convex_contours:
-                minRect = cv.minAreaRect(contour)
-                (x, y), (h, w), angle = minRect
-                
-                # Test 1: Aspect ratio:
-                aspect_ratio = max(h/w, w/h)
-                if not(7 < aspect_ratio < 11):
-                    continue
-                    
-                # Test2: How much is the contour a rectangle
-                rect_factor = cv.contourArea(contour) / (h*w)
-                if rect_factor < 0.91:
-                    continue
-                
-                # Only the right gasmeter contours get to this point
-                # Now reduce the contour down to 4 points (but not less)
-                try:
-                    apx = approx_contour(contour)
-                except RuntimeError as e:
-                    print(e)
-                    continue
-                
-                w2, h2 = 1000, 110
-                pts2 = np.float32([[0, h2], [0, 0], [w2, 0], [w2, h2]])
-                cnorm = normalize_rectangle(apx)
-
-                matrix = cv.getPerspectiveTransform(cnorm, pts2)
-                img_dig = cv.warpPerspective(img_bgr, matrix, (w2, h2))
-                
-                area = cv.contourArea(contour)
-                print(f"Contour: {threshold=}, {area=}, {aspect_ratio=}, {rect_factor=}")
-                file.write(f"{threshold}, {area}, {aspect_ratio}, {rect_factor}\n")
-                cv.drawContours(img_bgr, [contour], -1, (0, 255, 0), 2)
-                gasmeter_found = True
-                break
-                
-            if gasmeter_found:
-                cv.imshow("Digits", img_dig)
-                break
+        number_field = find_black_number_field(img_bgr=img_bgr)
+        if number_field is not None:
+            img_number_field, contour, params = number_field
+            print(params)
+            cv.imshow("Digits", img_number_field)    
+            cv.drawContours(img_bgr, [contour], -1, (0, 255, 0), 2)
             
         cv.imshow("BGR", img_bgr)
 
         if cv.waitKey(1) & 0xFF == ord('q'):
             break
 
-    file.close()
     cap.release()
     cv.destroyAllWindows()
      
