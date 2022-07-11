@@ -139,7 +139,7 @@ def find_black_number_field(img_bgr, numfield_width=1000):
 
 if __name__ == "__main__":
     
-    cap = cv.VideoCapture(0, cv.CAP_DSHOW)
+    cap = cv.VideoCapture(1, cv.CAP_DSHOW)
     cap.set(cv.CAP_PROP_FPS, 30)
     cap.set(cv.CAP_PROP_FOURCC, cv.VideoWriter.fourcc('m','j','p','g'))
     cap.set(cv.CAP_PROP_FOURCC, cv.VideoWriter.fourcc('M','J','P','G'))
@@ -157,8 +157,8 @@ if __name__ == "__main__":
             # OCR
             text = pytesseract.image_to_string(bgr_2_gray(img_number_field))
             ocr_plausible = False
-            if len(text) >= 8:
-                if text[:8].isdecimal():
+            if len(text) >= 7:
+                if text[:7].isdecimal():
                     ocr_plausible = True
                     params["text"] = text
             params["ocr_plausible"] = ocr_plausible
@@ -181,7 +181,7 @@ if __name__ == "__main__":
         if cv.waitKeyEx(10) & 0xFF == ord('q'):
             break
         
-        time.sleep(0.01)
+        time.sleep(0.1)
 
     cap.release()
     cv.destroyAllWindows()
