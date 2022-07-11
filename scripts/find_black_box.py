@@ -1,7 +1,7 @@
 # %% FIND BLACK BOX SCRIPT
 import numpy as np
 import cv2 as cv
-import json, os
+import json, os, pytesseract, time
 import datetime as dt
 
 
@@ -80,7 +80,7 @@ def normalize_rectangle(contour):
 
 
 
-def find_black_number_field(img_bgr):
+def find_black_number_field(img_bgr, numfield_width=1000):
     img_gray = bgr_2_gray(img_bgr)
 
     # try different grayscale contours for number field search
@@ -121,7 +121,8 @@ def find_black_number_field(img_bgr):
                 print(e)
                 continue
             
-            w2, h2 = 1000, 110
+            
+            w2, h2 = numfield_width, int(numfield_width / 9.2)  # aspect ratio of number field
             pts2 = np.float32([[0, h2], [0, 0], [w2, 0], [w2, h2]])
             cnorm = normalize_rectangle(apx)
 
@@ -129,7 +130,8 @@ def find_black_number_field(img_bgr):
             img_number_field = cv.warpPerspective(img_bgr, matrix, (w2, h2))
             
             area = cv.contourArea(contour)
-            params = {"threshold": threshold, "area": area, "ascpect_ratio": aspect_ratio, "rect_factor": rect_factor}
+            params = {"threshold": threshold, "area": area, "ascpect_ratio": aspect_ratio, "rect_factor": rect_factor,
+                      "numfield_width": numfield_width}
 
             return img_number_field, contour, params
             
@@ -143,28 +145,43 @@ if __name__ == "__main__":
     cap.set(cv.CAP_PROP_FOURCC, cv.VideoWriter.fourcc('M','J','P','G'))
     cap.set(cv.CAP_PROP_FRAME_WIDTH, 1920)
     cap.set(cv.CAP_PROP_FRAME_HEIGHT, 1080)
-                    
+    
+    store_results = True
+    
     while True:
         _, img_bgr = cap.read()
-        number_field = find_black_number_field(img_bgr=img_bgr)
+        number_field = find_black_number_field(img_bgr=img_bgr, numfield_width=1000)
         if number_field is not None:
             img_number_field, contour, params = number_field
             
+            # OCR
+            text = pytesseract.image_to_string(bgr_2_gray(img_number_field))
+            ocr_plausible = False
+            if len(text) >= 8:
+                if text[:8].isdecimal():
+                    ocr_plausible = True
+                    params["text"] = text
+            params["ocr_plausible"] = ocr_plausible
+            
             # save results to files
-            fpb = os.path.join("results", dt.datetime.now().strftime("%Y%m%d-%H%M%S"))
-            with open(fpb+"_params.json", "w") as file:
-                json.dump(params, file)
-            cv.imwrite(fpb +"_img_bgr.jpg", img_bgr)
-            cv.imwrite(fpb +"_img_number_field.jpg", img_number_field)
+            if store_results:
+                fpb = os.path.join("results", dt.datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-4])
+                with open(fpb+"_params.json", "w") as file:
+                    json.dump(params, file)
+                cv.imwrite(fpb +"_img_bgr.jpg", img_bgr)
+                cv.imwrite(fpb +"_img_number_field.jpg", img_number_field)
             
             # show results on screen
             cv.imshow("Digits", img_number_field)    
-            cv.drawContours(img_bgr, [contour], -1, (0, 255, 0), 2)
+            color = {True: (0, 255, 0), False: (0, 0, 255)}[ocr_plausible]
+            cv.drawContours(img_bgr, [contour], -1, color, 2)
             
         cv.imshow("BGR", img_bgr)
 
-        if cv.waitKey(1) & 0xFF == ord('q'):
+        if cv.waitKeyEx(10) & 0xFF == ord('q'):
             break
+        
+        time.sleep(0.01)
 
     cap.release()
     cv.destroyAllWindows()
