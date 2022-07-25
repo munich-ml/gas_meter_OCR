@@ -128,4 +128,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-scripts/results/
+gas_meter_2/results/
